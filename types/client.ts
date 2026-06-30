@@ -8,8 +8,13 @@ export interface Client {
   bccEmails: string;
   subject: string;
   bodyTemplate: string;
+  accountManager?: string | null;
   sendReport: boolean;
   isActive: boolean;
+  deliveryChannels: string; // Comma-separated string
+  waGroupName?: string | null;
+  waGroupId?: string | null;
+  waCaption?: string | null;
   createdAt: string | Date;
   updatedAt: string | Date;
 }

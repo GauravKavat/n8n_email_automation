@@ -112,13 +112,30 @@ export default function ClientManagementPage() {
         cell: ({ row }) => <div className="text-slate-500 font-mono text-xs">{row.original.excelClientName}</div>,
       },
       {
-        accessorKey: "toEmails",
-        header: "To",
-        cell: ({ row }) => (
-          <div className="max-w-[150px] truncate" title={row.original.toEmails.split("\n").join(", ")}>
-            {row.original.toEmails.split("\n").length} email(s)
-          </div>
-        )
+        accessorKey: "accountManager",
+        header: "Account Manager",
+        cell: ({ row }) => <div className="text-slate-600 text-sm">{row.original.accountManager || "-"}</div>,
+      },
+      {
+        accessorKey: "deliveryChannels",
+        header: "Delivery",
+        cell: ({ row }) => {
+          const channels = (row.original.deliveryChannels || "email").split(",").map(c => c.trim()).filter(Boolean);
+          return (
+            <div className="flex gap-2 flex-wrap">
+              {channels.includes("email") && (
+                <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
+                  EMAIL
+                </span>
+              )}
+              {channels.includes("whatsapp") && (
+                <span className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
+                  WHATSAPP
+                </span>
+              )}
+            </div>
+          )
+        }
       },
       {
         accessorKey: "isActive",

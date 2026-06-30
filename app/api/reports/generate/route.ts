@@ -1,8 +1,5 @@
 import { NextResponse } from "next/server";
 import ExcelJS from "exceljs";
-import os from "os";
-import fs from "fs/promises";
-import path from "path";
 
 const DATE_COLUMNS = [
   "Booking Date",
@@ -81,21 +78,10 @@ export async function POST(request: Request) {
           }
         });
         
-        // Add a little extra padding
+      // Add a little extra padding
         column.width = maxLength < 10 ? 10 : maxLength + 2;
       });
     }
-
-    // Determine the local Downloads directory
-    const reportsDir = path.join(os.homedir(), "Downloads", "ClientReports");
-    await fs.mkdir(reportsDir, { recursive: true });
-
-    // Sanitize the client name for Windows filenames
-    const safeClientName = client.replace(/[<>:"/\\|?*]/g, "_");
-    const filePath = path.join(reportsDir, `${safeClientName}.xlsx`);
-
-    // Save the workbook locally
-    await workbook.xlsx.writeFile(filePath);
 
     // Write workbook to buffer for the HTTP response
     const buffer = await workbook.xlsx.writeBuffer();

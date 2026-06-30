@@ -11,8 +11,13 @@ const updateClientSchema = z.object({
   bccEmails: z.string().optional(),
   subject: z.string().optional(),
   bodyTemplate: z.string().optional(),
+  accountManager: z.string().optional().nullable(),
   sendReport: z.boolean().optional(),
   isActive: z.boolean().optional(),
+  deliveryChannels: z.string().optional(),
+  waGroupName: z.string().optional().nullable(),
+  waGroupId: z.string().optional().nullable(),
+  waCaption: z.string().optional().nullable(),
 });
 
 export async function PUT(request: Request, context: { params: Promise<{ id: string }> }) {

@@ -17,8 +17,13 @@ model Client {
   bccEmails       String
   subject         String
   bodyTemplate    String
+  accountManager  String?
   sendReport      Boolean  @default(true)
   isActive        Boolean  @default(true)
+  deliveryChannels String  @default("email")
+  waGroupName     String?
+  waGroupId       String?
+  waCaption       String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }

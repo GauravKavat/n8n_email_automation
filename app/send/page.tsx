@@ -11,12 +11,29 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { useReportUpload } from "@/hooks/useReportUpload"
 
+import { DownloadProgressModal } from "./components/DownloadProgressModal"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
+
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB
 
 export default function SendReportsPage() {
   const [file, setFile] = React.useState<File | null>(null)
+  const [previewMode, setPreviewMode] = React.useState(true)
   
-  const { uploadReport, loading, error, success } = useReportUpload()
+  const { 
+    uploadReport, 
+    loading, 
+    error, 
+    success,
+    isProgressModalOpen,
+    progress,
+    results,
+    handleCancel,
+    handleRetry,
+    closeProgressModal,
+    triggerDownload
+  } = useReportUpload()
 
   const onDrop = React.useCallback((acceptedFiles: File[], rejectedFiles: any[]) => {
     if (rejectedFiles.length > 0) {
@@ -59,14 +76,11 @@ export default function SendReportsPage() {
       return
     }
 
-    await uploadReport(file);
+    await uploadReport(file, previewMode);
   }
 
   const handleReset = () => {
     setFile(null);
-    // Note: since success and error are derived from the hook, resetting the file 
-    // allows a new upload. To fully reset hook state we could reload or add a reset in hook,
-    // but the hook naturally resets on next upload. We can just render the upload area again.
   }
 
   if (success || error) {
@@ -155,24 +169,45 @@ export default function SendReportsPage() {
           </CardContent>
         </Card>
 
-        <div className="flex justify-center">
+        <div className="flex flex-col items-center justify-center space-y-6">
+          <div className="flex items-center space-x-2 bg-slate-50 px-4 py-3 rounded-lg border">
+            <Switch 
+              id="preview-mode" 
+              checked={previewMode}
+              onCheckedChange={setPreviewMode}
+            />
+            <Label htmlFor="preview-mode" className="font-medium cursor-pointer">
+              Preview Mode (Download reports locally instead of sending via n8n)
+            </Label>
+          </div>
+
           <Button 
             size="lg" 
             className="w-full sm:w-auto min-w-[250px] h-14 text-lg shadow-md"
             disabled={!file || loading}
             onClick={handleGenerateAndSend}
           >
-            {loading ? (
+            {loading && !isProgressModalOpen ? (
               <>
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                Uploading...
+                Processing...
               </>
             ) : (
-              "Generate & Send Reports"
+              previewMode ? "Generate & Download" : "Generate & Send Reports"
             )}
           </Button>
         </div>
       </div>
+
+      <DownloadProgressModal 
+        isOpen={isProgressModalOpen}
+        progress={progress}
+        results={results}
+        onCancel={handleCancel}
+        onRetry={handleRetry}
+        onClose={closeProgressModal}
+        onDownload={triggerDownload}
+      />
     </div>
   )
 }

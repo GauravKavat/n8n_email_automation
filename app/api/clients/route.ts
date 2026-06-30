@@ -11,8 +11,13 @@ const createClientSchema = z.object({
   bccEmails: z.string(),
   subject: z.string(),
   bodyTemplate: z.string(),
+  accountManager: z.string().optional().nullable(),
   sendReport: z.boolean().default(true),
   isActive: z.boolean().default(true),
+  deliveryChannels: z.string().default("email"),
+  waGroupName: z.string().optional().nullable(),
+  waGroupId: z.string().optional().nullable(),
+  waCaption: z.string().optional().nullable(),
 });
 
 export async function GET(request: Request) {

@@ -22,21 +22,6 @@ async function main() {
     },
   });
 
-  await prisma.client.create({
-    data: {
-      excelClientName: "ACME CORP",
-      displayName: "ACME Corporation",
-      companyName: "ACME Corp",
-      toEmails: "logistics@acme.example.com",
-      ccEmails: "manager@acme.example.com",
-      bccEmails: "",
-      subject: "ACME Daily Shipment Status",
-      bodyTemplate: "Hi Team,\n\nAttached is your daily status report.",
-      sendReport: true,
-      isActive: true,
-    },
-  });
-
   console.log("Database seeded with 2 active demo clients.");
 }
 
