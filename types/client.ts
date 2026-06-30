@@ -14,3 +14,11 @@ export interface Client {
   updatedAt: string | Date;
 }
 
+export interface ReportResult {
+  clientName: string;
+  status: "success" | "failed";
+  to?: string;
+  cc?: string;
+  generatedFile?: string;
+  reason?: string;
+}

@@ -66,7 +66,7 @@ export async function POST(request: Request) {
         const isDateColumn = column.header && DATE_COLUMNS.includes(column.header.toString());
 
         column["eachCell"]?.({ includeEmpty: true }, (cell) => {
-          if (isDateColumn && cell.row > 1) {
+          if (isDateColumn && Number(cell.row) > 1) {
             if (cell.value instanceof Date) {
               const hasTime = cell.value.getUTCHours() > 0 || cell.value.getUTCMinutes() > 0 || cell.value.getUTCSeconds() > 0 || cell.value.getUTCMilliseconds() > 0;
               cell.numFmt = hasTime ? "dd/mm/yyyy hh:mm" : "dd/mm/yyyy";
@@ -101,7 +101,7 @@ export async function POST(request: Request) {
     const buffer = await workbook.xlsx.writeBuffer();
 
     // Return the binary data
-    return new NextResponse(buffer as Buffer, {
+    return new NextResponse(buffer as any, {
       status: 200,
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
