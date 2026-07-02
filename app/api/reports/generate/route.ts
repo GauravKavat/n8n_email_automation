@@ -12,10 +12,14 @@ function excelSerialToDate(serial: number): Date {
   return new Date((serial - 25569) * 86400 * 1000);
 }
 
+function uniqueStrings(values: string[]): string[] {
+  return Array.from(new Set(values));
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { client, rows } = body;
+    const { client, rows, selectedColumns, orderedColumns } = body;
 
     if (!client || !rows || !Array.isArray(rows)) {
       return NextResponse.json(
@@ -23,6 +27,60 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+    if (
+      selectedColumns !== undefined &&
+      (!Array.isArray(selectedColumns) ||
+        !selectedColumns.every((column) => typeof column === "string"))
+    ) {
+      return NextResponse.json(
+        { error: "selectedColumns must be an array of strings" },
+        { status: 400 },
+      );
+    }
+    if (
+      orderedColumns !== undefined &&
+      (!Array.isArray(orderedColumns) ||
+        !orderedColumns.every((column) => typeof column === "string"))
+    ) {
+      return NextResponse.json(
+        { error: "orderedColumns must be an array of strings" },
+        { status: 400 },
+      );
+    }
+    if (selectedColumns?.length === 0) {
+      return NextResponse.json(
+        { error: "Select at least one report column" },
+        { status: 400 },
+      );
+    }
+
+    const availableColumns = uniqueStrings(
+      rows.flatMap((row) =>
+        row && typeof row === "object" ? Object.keys(row) : [],
+      ),
+    );
+    const requestedColumns = uniqueStrings(
+      selectedColumns ?? availableColumns,
+    );
+    const selectedSet = new Set(requestedColumns);
+    const availableSet = new Set(availableColumns);
+    const requestedOrder = uniqueStrings(orderedColumns ?? requestedColumns);
+    const finalColumns = [
+      ...requestedOrder.filter(
+        (column) => selectedSet.has(column) && availableSet.has(column),
+      ),
+      ...requestedColumns.filter(
+        (column) =>
+          availableSet.has(column) && !requestedOrder.includes(column),
+      ),
+    ];
+    const unknownColumns = requestedColumns.filter(
+      (column) => !availableSet.has(column),
+    );
+    const warnings =
+      unknownColumns.length > 0
+        ? [`Ignored unknown report columns: ${unknownColumns.join(", ")}`]
+        : [];
 
     // Pre-process rows for dates
     for (const row of rows) {
@@ -40,11 +98,8 @@ export async function POST(request: Request) {
     });
 
     if (rows.length > 0) {
-      // Get the headers from the keys of the first row
-      const headers = Object.keys(rows[0]);
-      
       // Add column definitions
-      worksheet.columns = headers.map(header => ({
+      worksheet.columns = finalColumns.map(header => ({
         header,
         key: header,
         width: 10 // initial width, will auto-size later
@@ -87,11 +142,14 @@ export async function POST(request: Request) {
     const buffer = await workbook.xlsx.writeBuffer();
 
     // Return the binary data
-    return new NextResponse(buffer as any, {
+    return new NextResponse(buffer, {
       status: 200,
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "Content-Disposition": `attachment; filename="${encodeURIComponent(client)}.xlsx"`,
+        ...(warnings.length > 0
+          ? { "X-Report-Warnings": encodeURIComponent(JSON.stringify(warnings)) }
+          : {}),
       },
     });
 

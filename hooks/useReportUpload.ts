@@ -1,11 +1,22 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { toast } from "sonner";
-import { Client } from "@/types/client";
+import {
+  loadClientStore,
+  matchClientConfig,
+  normalizeStore,
+} from "@/lib/client-config";
 
 export interface GeneratedReport {
   client: string;
   filename: string;
   blob: Blob;
+}
+
+interface ReportTask {
+  client: string;
+  rows: Record<string, unknown>[];
+  selectedColumns?: string[];
+  orderedColumns?: string[];
 }
 
 export function useReportUpload() {
@@ -19,62 +30,112 @@ export function useReportUpload() {
   const [results, setResults] = useState<{ successful: GeneratedReport[]; failed: string[] } | null>(null);
   
   const cancelFlag = useRef(false);
-  const extractedDataRef = useRef<{ client: string; rows: any[] }[]>([]);
+  const extractedDataRef = useRef<ReportTask[]>([]);
+  const shownWarningsRef = useRef(new Set<string>());
 
-  // Cleanup old results when a new upload starts or component unmounts
-  const cleanupBlobs = () => {
-    if (results && results.successful) {
-      // Blobs are garbage collected when there are no references to them, 
-      // so simply clearing the state is enough.
-      // But if we had active Object URLs, we'd revoke them here.
-    }
-  };
-
-  useEffect(() => {
-    return cleanupBlobs;
-  }, [results]);
-
-  const uploadReport = async (file: File, previewMode: boolean = false) => {
-    cleanupBlobs();
+  const uploadReport = async (
+    file: File,
+    previewMode: boolean = false,
+    selectedColumns?: string[],
+    orderedColumns?: string[],
+  ) => {
     setLoading(true);
     setError(null);
     setSuccess(false);
     setIsProgressModalOpen(false);
     setProgress(null);
-    setResults(null);
-    cancelFlag.current = false;
-    extractedDataRef.current = [];
+      setResults(null);
+      cancelFlag.current = false;
+      extractedDataRef.current = [];
+      shownWarningsRef.current.clear();
 
     try {
-      if (!previewMode) {
-        // --- EXISTING n8n WORKFLOW ---
-        const clientsRes = await fetch("/api/clients?active=true&sendReport=true");
-        if (!clientsRes.ok) throw new Error("Failed to fetch client configurations");
-        
-        const clients: Client[] = await clientsRes.json();
-        const clientMap: Record<string, any> = {};
-        
-        clients.forEach((c) => {
-          const to = c.toEmails.split("\n").map(e => e.trim()).filter(e => e);
-          const cc = c.ccEmails.split("\n").map(e => e.trim()).filter(e => e);
-          const bcc = c.bccEmails.split("\n").map(e => e.trim()).filter(e => e);
-          
-          clientMap[c.excelClientName] = {
-            displayName: c.displayName,
-            companyName: c.companyName,
-            to, cc, bcc,
-            subject: c.subject,
-            body: c.bodyTemplate
-          };
-        });
+      toast.info("Extracting data...");
 
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("clientMap", JSON.stringify(clientMap));
+      const formData = new FormData();
+      formData.append("file", file);
+      const extractRes = await fetch("/api/reports/extract", {
+        method: "POST",
+        body: formData
+      });
+
+      if (!extractRes.ok) throw new Error("Failed to extract data from Excel");
+      const { grouped } = (await extractRes.json()) as {
+        grouped: Record<string, Record<string, unknown>[]>;
+      };
+
+      const clientNames = Object.keys(grouped);
+      if (clientNames.length === 0) {
+        throw new Error("No clients found in the uploaded file.");
+      }
+
+      let clientConfiguration;
+      try {
+        clientConfiguration = normalizeStore(loadClientStore());
+      } catch (error) {
+        console.warn("Failed to read browser client configuration", error);
+        toast.warning("Browser client configuration was corrupted and ignored for this upload.");
+        clientConfiguration = normalizeStore({
+          version: 1,
+          updatedAt: new Date().toISOString(),
+          clients: [],
+        });
+      }
+      const matchedClients = clientNames
+        .map((clientName) => ({
+          clientName,
+          config: matchClientConfig(clientName, clientConfiguration.clients),
+        }))
+        .filter(({ config }) => Boolean(config));
+      const unknownClients = clientNames.filter(
+        (clientName) => !matchClientConfig(clientName, clientConfiguration.clients),
+      );
+      if (unknownClients.length > 0) {
+        toast.warning(
+          `No browser client configuration matched: ${unknownClients.join(", ")}`,
+        );
+      }
+
+      extractedDataRef.current = clientNames.map(client => ({
+        client,
+        rows: grouped[client],
+        selectedColumns,
+        orderedColumns,
+      }));
+
+      if (!previewMode) {
+        const clientMap = matchedClients.reduce<Record<string, unknown>>(
+          (acc, { clientName, config }) => {
+            if (!config) return acc;
+            acc[clientName] = {
+              displayName: config.displayName,
+              sender: config.sender,
+              email: {
+                to: config.to,
+                cc: config.cc,
+                subject: config.subject,
+                body: config.body,
+              },
+            };
+            return acc;
+          },
+          {},
+        );
+
+        const n8nFormData = new FormData();
+        n8nFormData.append("file", file);
+        n8nFormData.append("clientMap", JSON.stringify(clientMap));
+        n8nFormData.append("clientConfiguration", JSON.stringify(clientConfiguration));
+        if (selectedColumns) {
+          n8nFormData.append("selectedColumns", JSON.stringify(selectedColumns));
+        }
+        if (orderedColumns) {
+          n8nFormData.append("orderedColumns", JSON.stringify(orderedColumns));
+        }
 
         const response = await fetch("http://localhost:5678/webhook-test/send-client-reports", {
           method: "POST",
-          body: formData,
+          body: n8nFormData,
         });
 
         if (!response.ok) throw new Error(`n8n webhook error: ${response.status}`);
@@ -82,40 +143,13 @@ export function useReportUpload() {
         setSuccess(true);
         toast.success("Upload successful! n8n is processing the reports.");
       } else {
-        // --- PREVIEW MODE (BROWSER DOWNLOAD LOOP) ---
-        toast.info("Extracting data...");
-        
-        const formData = new FormData();
-        formData.append("file", file);
-        const extractRes = await fetch("/api/reports/extract", {
-          method: "POST",
-          body: formData
-        });
-        
-        if (!extractRes.ok) throw new Error("Failed to extract data from Excel");
-        const { grouped } = await extractRes.json();
-        
-        const configRes = await fetch("/api/clients/report-config");
-        if (!configRes.ok) throw new Error("Failed to fetch active clients");
-        const activeClientsMap = await configRes.json();
-        
-        const clientsToProcess = Object.keys(grouped).filter(clientName => activeClientsMap[clientName]);
-        
-        if (clientsToProcess.length === 0) {
-          throw new Error("No active clients found in the uploaded file.");
-        }
-        
-        extractedDataRef.current = clientsToProcess.map(client => ({
-          client,
-          rows: grouped[client]
-        }));
-        
         setIsProgressModalOpen(true);
         await processSequentialDownloads(extractedDataRef.current, { successful: [], failed: [] });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Upload error:", err);
-      const errorMessage = err.message || "Failed to process file";
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to process file";
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {
@@ -138,7 +172,7 @@ export function useReportUpload() {
   };
 
   const processSequentialDownloads = async (
-    tasks: { client: string; rows: any[] }[], 
+    tasks: ReportTask[],
     initialResults: { successful: GeneratedReport[]; failed: string[] }
   ) => {
     let currentCount = 0;
@@ -163,7 +197,32 @@ export function useReportUpload() {
           body: JSON.stringify(task)
         });
 
-        if (!response.ok) throw new Error(`Generation failed with status: ${response.status}`);
+        if (!response.ok) {
+          const errorPayload = await response.json().catch(() => null);
+          throw new Error(
+            errorPayload?.error || `Generation failed with status: ${response.status}`,
+          );
+        }
+
+        const warningsHeader = response.headers.get("X-Report-Warnings");
+        if (warningsHeader) {
+          try {
+            const warnings = JSON.parse(decodeURIComponent(warningsHeader));
+            if (Array.isArray(warnings)) {
+              for (const warning of warnings) {
+                if (
+                  typeof warning === "string" &&
+                  !shownWarningsRef.current.has(warning)
+                ) {
+                  shownWarningsRef.current.add(warning);
+                  toast.warning(warning);
+                }
+              }
+            }
+          } catch {
+            console.warn("Unable to parse report generation warnings");
+          }
+        }
 
         const blob = await response.blob();
         const filename = `${task.client}.xlsx`;

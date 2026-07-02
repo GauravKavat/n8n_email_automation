@@ -6,24 +6,3 @@ datasource db {
   provider = "sqlite"
   url      = "file:./dev.db"
 }
-
-model Client {
-  id              String   @id @default(uuid())
-  excelClientName String   @unique
-  displayName     String   @unique
-  companyName     String
-  toEmails        String
-  ccEmails        String
-  bccEmails       String
-  subject         String
-  bodyTemplate    String
-  accountManager  String?
-  sendReport      Boolean  @default(true)
-  isActive        Boolean  @default(true)
-  deliveryChannels String  @default("email")
-  waGroupName     String?
-  waGroupId       String?
-  waCaption       String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-}

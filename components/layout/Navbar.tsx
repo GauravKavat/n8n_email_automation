@@ -1,4 +1,3 @@
-import Link from "next/link"
 import { Package } from "lucide-react"
 
 export function Navbar() {

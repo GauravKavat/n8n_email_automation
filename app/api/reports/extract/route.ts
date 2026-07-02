@@ -10,50 +10,51 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer());
+    const buffer = await file.arrayBuffer();
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer as any);
+    await workbook.xlsx.load(buffer);
 
     const worksheet = workbook.worksheets[0];
     if (!worksheet) {
       return NextResponse.json({ error: "No worksheet found" }, { status: 400 });
     }
 
-    const headers: string[] = [];
-    worksheet.getRow(1).eachCell((cell, colNumber) => {
-      headers[colNumber] = cell.value ? cell.value.toString() : `Column${colNumber}`;
+    const headers: { columnNumber: number; name: string }[] = [];
+    worksheet.getRow(1).eachCell({ includeEmpty: true }, (cell, columnNumber) => {
+      const name = cell.text;
+      if (name.trim().length > 0) {
+        headers.push({ columnNumber, name });
+      }
     });
 
-    const rows: any[] = [];
+    const rows: Record<string, unknown>[] = [];
     worksheet.eachRow((row, rowNumber) => {
       if (rowNumber === 1) return; // Skip header
 
-      const rowData: any = {};
+      const rowData: Record<string, unknown> = {};
       let hasData = false;
-      row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-        const header = headers[colNumber];
-        if (header) {
-          // If the cell contains a formula, get the result, otherwise get the value
-          let value = cell.value;
-          if (value && typeof value === 'object' && 'result' in value) {
-            value = (value as any).result;
-          }
-          rowData[header] = value;
-          if (value !== null && value !== undefined && value !== '') {
-            hasData = true;
-          }
+      for (const header of headers) {
+        const cell = row.getCell(header.columnNumber);
+        // If the cell contains a formula, get the result, otherwise get the value
+        let value = cell.value;
+        if (value && typeof value === 'object' && 'result' in value) {
+          value = (value as { result?: unknown }).result as typeof value;
         }
-      });
+        rowData[header.name] = value;
+        if (value !== null && value !== undefined && value !== '') {
+          hasData = true;
+        }
+      }
       if (hasData) {
         rows.push(rowData);
       }
     });
 
     // Group rows by 'Client orgnization'
-    const groupedData: Record<string, any[]> = {};
+    const groupedData: Record<string, Record<string, unknown>[]> = {};
     for (const row of rows) {
       const clientName = row["Client orgnization"];
-      if (!clientName) continue;
+      if (typeof clientName !== "string" || !clientName) continue;
       
       if (!groupedData[clientName]) {
         groupedData[clientName] = [];

@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { Users, Send } from "lucide-react"
+import { Send, Users } from "lucide-react"
 import { PageHeader } from "@/components/layout/PageHeader"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
 
@@ -20,17 +20,17 @@ export default function Dashboard() {
               </div>
               <CardTitle className="group-hover:text-blue-600 transition-colors">Client Management</CardTitle>
               <CardDescription>
-                Add, edit, or remove client configurations for automated report distribution.
+                Manage browser-only client configurations for report distribution.
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="text-sm font-medium text-blue-600 flex items-center">
-                Manage Clients &rarr;
+                Configure Clients &rarr;
               </div>
             </CardContent>
           </Card>
         </Link>
-        
+
         <Link href="/send" className="group">
           <Card className="h-full transition-all hover:shadow-md hover:border-blue-200 group-hover:-translate-y-1">
             <CardHeader>

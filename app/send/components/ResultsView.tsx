@@ -1,9 +1,17 @@
 "use client"
 
 import { CheckCircle2, XCircle, AlertCircle } from "lucide-react"
-import { ReportResult } from "@/types/client"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+
+type ReportResult = {
+  clientName: string
+  status: "success" | "failed"
+  to?: string
+  cc?: string
+  generatedFile?: string
+  reason?: string
+}
 
 interface ResultsViewProps {
   results: ReportResult[]
